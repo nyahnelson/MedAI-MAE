@@ -12,6 +12,7 @@
 import math
 import sys
 from typing import Iterable, Optional
+from sklearn.metrics import confusion_matrix
 
 import torch
 
@@ -41,7 +42,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         print('log_dir: {}'.format(log_writer.log_dir))
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-
+        
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
@@ -66,6 +67,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         loss_scaler(loss, optimizer, clip_grad=max_norm,
                     parameters=model.parameters(), create_graph=False,
                     update_grad=(data_iter_step + 1) % accum_iter == 0)
+        
         if (data_iter_step + 1) % accum_iter == 0:
             optimizer.zero_grad()
 
@@ -105,6 +107,9 @@ def evaluate(data_loader, model, device):
     # switch to evaluation mode
     model.eval()
 
+    all_targets = []
+    all_predictions = []
+
     for batch in metric_logger.log_every(data_loader, 10, header):
         images = batch[0]
         target = batch[-1]
@@ -116,15 +121,36 @@ def evaluate(data_loader, model, device):
             output = model(images)
             loss = criterion(output, target)
 
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        acc1, acc2 = accuracy(output, target, topk=(1,2))
 
         batch_size = images.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
-        metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+        metric_logger.meters['acc2'].update(acc2.item(), n=batch_size)
+
+        # add to all targets and all predictions
+        all_targets.extend(target.cpu().numpy())
+        _, predicted_labels = torch.max(output, 1)
+        all_predictions.extend(predicted_labels.cpu().numpy())
+    
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+
+    # confusion matrix 
+    cm = confusion_matrix(all_targets, all_predictions)
+    tn, fp, fn, tp = cm.ravel()
+
+    sensitivity = tp / (tp + fn) 
+    specificity = tn / (tn + fp) 
+
+    metric_logger.add_meter('sens', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    metric_logger.add_meter('spec', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    metric_logger.meters['sens'].update(sensitivity, n=batch_size)
+    metric_logger.meters['spec'].update(specificity, n=batch_size)
+
+    print('* Acc@1 {top1.global_avg:.3f} Acc@2 {top2.global_avg:.3f} loss {losses.global_avg:.3f}'
+          .format(top1=metric_logger.acc1, top2=metric_logger.acc2, losses=metric_logger.loss))
+    
+    print('* Sensitivity: {:.3f} Specificity: {:.3f}'.format(sensitivity, specificity))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

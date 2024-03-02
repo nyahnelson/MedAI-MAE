@@ -229,7 +229,13 @@ def init_distributed_mode(args):
         args.gpu = int(os.environ['LOCAL_RANK'])
     elif 'SLURM_PROCID' in os.environ:
         args.rank = int(os.environ['SLURM_PROCID'])
-        args.gpu = args.rank % torch.cuda.device_count()
+        #args.gpu = args.rank % torch.cuda.device_count() # getting errors     
+        # check if GPUs are available
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+            args.gpu = args.rank % torch.cuda.device_count()
+        else:
+            args.gpu = -1  # or some default value indicating no GPU\
+            print("ERROR: NO GPU AVAILABLE")
     else:
         print('Not using distributed mode')
         setup_for_distributed(is_master=True)  # hack

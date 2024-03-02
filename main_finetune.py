@@ -236,6 +236,15 @@ def main(args):
         print("Load pre-trained checkpoint from: %s" % args.finetune)
         checkpoint_model = checkpoint['model']
         state_dict = model.state_dict()
+
+        # Modify the final layer parameters to match the desired architecture (2 classes)
+        checkpoint_model['head.weight'] = checkpoint_model['head.weight'][:2, :]
+        checkpoint_model['head.bias'] = checkpoint_model['head.bias'][:2]
+
+        # Ensure the state_dict also has the correct shape
+        state_dict['head.weight'] = state_dict['head.weight'][:2, :]
+        state_dict['head.bias'] = state_dict['head.bias'][:2]
+
         for k in ['head.weight', 'head.bias']:
             if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
                 print(f"Removing key {k} from pretrained checkpoint")
@@ -248,10 +257,16 @@ def main(args):
         msg = model.load_state_dict(checkpoint_model, strict=False)
         print(msg)
 
-        if args.global_pool:
-            assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
-        else:
-            assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
+        # Verify the keys before the assertion
+        print("Missing keys:", msg.missing_keys)
+        print("Unexpected keys:", msg.unexpected_keys)
+
+        # Check if there are no missing keys
+        assert not msg.missing_keys, f"Missing keys: {msg.missing_keys}"
+        #if args.global_pool:
+            #assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
+        #else:
+            #assert set(msg.missing_keys) == {'head.weight', 'head.bias'}
 
         # manually initialize fc layer
         trunc_normal_(model.head.weight, std=2e-5)
@@ -287,13 +302,8 @@ def main(args):
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
-    if mixup_fn is not None:
-        # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
-    elif args.smoothing > 0.:
-        criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
-    else:
-        criterion = torch.nn.CrossEntropyLoss()
+    # loss function: cross entropy
+    criterion = torch.nn.CrossEntropyLoss()
 
     print("criterion = %s" % str(criterion))
 
@@ -329,7 +339,7 @@ def main(args):
 
         if log_writer is not None:
             log_writer.add_scalar('perf/test_acc1', test_stats['acc1'], epoch)
-            log_writer.add_scalar('perf/test_acc5', test_stats['acc5'], epoch)
+            log_writer.add_scalar('perf/test_acc2', test_stats['acc2'], epoch)
             log_writer.add_scalar('perf/test_loss', test_stats['loss'], epoch)
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
