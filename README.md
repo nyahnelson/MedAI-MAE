@@ -36,13 +36,17 @@ Cross entropy loss was used. This decision came after failing to modify the code
 The original evaluation used a top1 and top5 accuracy. Since this task is for binary classification, the top5 accuracy is not relevant. We changed the top5 to a top2 accuracy to get rid of errors. The top2 accuracy is always 100% because there are only two classes, so it is not necessary but was kept in the code to avoid errors. In addition to accuracy, sensitivity and specificity was calculated using a confusion matrix imported from sklearn.metrics. These modifications can be found in engine_finetune.py in the evaluate() function. In addition, the testing output was modified to print the sensitivity and specificity. 
 
 ### Fine-tuning
-To finetune this model, a GPU is needed. Finetuning is accomplished using the command below. Further detail on the arguments can be found in the original Meta AI repository's PRETRAIN.md found [here](https://github.com/facebookresearch/mae/blob/main/FINETUNE.md). 
+To finetune this model, a GPU is needed. Finetuning is accomplished using the command below. Further detail on the arguments can be found in the original Meta AI repository's FINETUNE.md found [here](https://github.com/facebookresearch/mae/blob/main/FINETUNE.md). 
 
 ```
-python main_finetune.py --finetune mae_finetuned_vit_base.pth --model vit_base_patch16 --batch_size 16 --data_path ${IMAGE_DIR} --nb_classes 2
+python main_finetune.py --finetune mae_finetuned_vit_base.pth --model vit_base_patch16 --batch_size 16 --data_path ${IMAGE_DIR} --nb_classes 2 --cls_token
 ```
 
 ### Results
+To evaluate the fine-tuned model, a GPU is needed. Evaluation can be accomplished using the command below. Further details on the arguments can be found in the original Meta AI repository's FINETUNE.md found [here](https://github.com/facebookresearch/mae/blob/main/FINETUNE.md). 
+```
+python main_finetune.py --eval --resume FINETUNED_MODEL_NAME.pth --model vit_base_patch16 --batch_size 16 --data_path ${IMAGE_DIR} --nb_classes 2 --cls_token
+```
 After fine-tuning, the model had a 97.6% accuracy. After evaluation on a test set of 815 images, the model produced an accuracy of 98.16%, sensitivity of 98.1%, and specificity of 98.2%. 
 
 ### License (from original repository)

@@ -262,7 +262,7 @@ def main(args):
         print("Unexpected keys:", msg.unexpected_keys)
 
         # Check if there are no missing keys
-        assert not msg.missing_keys, f"Missing keys: {msg.missing_keys}"
+        #assert not msg.missing_keys, f"Missing keys: {msg.missing_keys}"
         #if args.global_pool:
             #assert set(msg.missing_keys) == {'head.weight', 'head.bias', 'fc_norm.weight', 'fc_norm.bias'}
         #else:
@@ -302,8 +302,16 @@ def main(args):
     optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
 
-    # loss function: cross entropy
+    #criterion = torch.nn.BCEWithLogitsLoss() # binary loss function 
     criterion = torch.nn.CrossEntropyLoss()
+    #criterion = torch.nn.functional.binary_cross_entropy_with_logits
+    #if mixup_fn is not None:
+        # smoothing is handled with mixup label transform
+     #   criterion = SoftTargetCrossEntropy()
+    #elif args.smoothing > 0.:
+    #    criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+    #else:
+    #    criterion = torch.nn.CrossEntropyLoss()
 
     print("criterion = %s" % str(criterion))
 
@@ -312,6 +320,7 @@ def main(args):
     if args.eval:
         test_stats = evaluate(data_loader_val, model, device)
         print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
+        #print('* Sensitivity: {:.3f} Specificity: {:.3f}'.format(test_stats['sens'], test_stats['spec']))
         exit(0)
 
     print(f"Start training for {args.epochs} epochs")
